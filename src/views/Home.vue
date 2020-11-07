@@ -10,7 +10,23 @@
         <p>Location = {{ currentTimeInSecs }}</p>
         <button v-if="!isPlaying" type="button" @click="onPlay">Play</button>
         <button v-else type="button" @click="onPause">Pause</button>
+        <button v-if="isManuallyStopped" @click="onManuallyStart">
+          Strat recording
+        </button>
+        <button v-if="!isManuallyStopped" @click="onManuallyStop">
+          Stop recording
+        </button>
       </form>
+    </div>
+    <div class="speech-container">
+      <div class="match">{{ matchStr }}</div>
+      <div class="action">
+        <ul>
+          <li v-for="(action, index) in actions" :key="index">
+            {{ index }} -- {{ action }}
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
@@ -38,7 +54,10 @@ declare global {
       isPlaying: false,
       recognition: null,
       throttle: false,
-      currentTimeInSecs: 0
+      currentTimeInSecs: 0,
+      matchStr: "",
+      actions: [],
+      isManuallyStopped: false
     };
   },
 
@@ -95,6 +114,8 @@ declare global {
         this.throttle
       );
 
+      this.matchStr = action + (isFinal ? "." : "…");
+
       if (!this.throttle && this.player) {
         let toThrottle = true;
 
@@ -139,24 +160,104 @@ declare global {
         }
       }
     };
+
+    this.recognition.onspeechend = () => {
+      this.actions.unshift("onspeechend");
+      // this.recognition.stop();
+    };
+
+    this.recognition.onerror = (event: any) => {
+      this.actions.unshift(`onerror (${event.error})`);
+    };
+
+    this.recognition.onaudiostart = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onaudiostart`);
+      //Fired when the user agent has started to capture audio.
+      console.log("SpeechRecognition.onaudiostart");
+    };
+
+    this.recognition.onaudioend = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onaudioend`);
+      //Fired when the user agent has finished capturing audio.
+      console.log("SpeechRecognition.onaudioend");
+    };
+
+    this.recognition.onend = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onend`);
+      //Fired when the speech recognition service has disconnected.
+      console.log("SpeechRecognition.onend");
+
+      if (!this.isManuallyStopped) {
+        // Continuously restart listening unless manually stopped
+        this.recognition.start();
+      }
+    };
+
+    this.recognition.onnomatch = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onmatch`);
+      //Fired when the speech recognition service returns a final result with no significant recognition. This may involve some degree of recognition, which doesn't meet or exceed the confidence threshold.
+      console.log("SpeechRecognition.onnomatch");
+    };
+
+    this.recognition.onsoundstart = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onsoundstart`);
+      //Fired when any sound — recognisable speech or not — has been detected.
+      console.log("SpeechRecognition.onsoundstart");
+    };
+
+    this.recognition.onsoundend = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onsoundend`);
+      //Fired when any sound — recognisable speech or not — has stopped being detected.
+      console.log("SpeechRecognition.onsoundend");
+    };
+
+    this.recognition.onspeechstart = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onspeechstart`);
+      //Fired when sound that is recognised by the speech recognition service as speech has been detected.
+      console.log("SpeechRecognition.onspeechstart");
+    };
+
+    this.recognition.onstart = (event: SpeechRecognitionEvent) => {
+      this.actions.unshift(`onstart`);
+      //Fired when the speech recognition service has begun listening to incoming audio with intent to recognize grammars associated with the current SpeechRecognition.
+      console.log("SpeechRecognition.onstart");
+    };
   },
 
   watch: {
+    actions() {
+      if (this.actions.length > 25) {
+        this.actions = this.actions.splice(0, 25);
+      }
+    },
+
     youTubeURLIsValid() {
       if (this.youTubeURLIsValid) {
         this.player = YouTubePlayer(this.playerDivId, {
           videoId: this.videoId
         });
+        this.isManuallyStopped = false;
         this.recognition.start();
       } else {
         this.player = null;
         this.isPlaying = false;
+        this.isManuallyStopped = true;
         this.recognition.stop();
       }
     }
   },
 
   methods: {
+    onManuallyStart() {
+      this.isManuallyStopped = false;
+      this.recognition.start();
+    },
+
+    onManuallyStop() {
+      this.isManuallyStopped = true;
+      this.recognition.stop();
+    },
+
     onPlay() {
       this.isPlaying = true;
       this.player.playVideo();
